@@ -1,6 +1,10 @@
--- PortAlert esquema completo 
+-- PortAlert · esquema completo (PostgreSQL 16)
+-- Se ejecuta solo la primera vez que se crea el volumen (docker-entrypoint-initdb.d).
+-- Si ya tienes una base creada con una versión anterior, usa los archivos de migrations/.
 
 CREATE TYPE severity AS ENUM ('baja', 'media', 'alta', 'critica');
+
+CREATE TYPE event_type AS ENUM ('puerto_nuevo', 'proceso_sospechoso');
 
 CREATE TYPE alert_status AS ENUM ('nueva', 'atendida', 'ignorada');
 
@@ -58,6 +62,7 @@ CREATE TABLE hosts (
 	api_key_hash VARCHAR(255) NOT NULL, 
 	last_seen TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, 
 	score INTEGER, 
+	review_completed_at TIMESTAMP WITH TIME ZONE, 
 	created_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, 
 	PRIMARY KEY (id), 
 	UNIQUE (user_id), 
@@ -79,27 +84,18 @@ CREATE INDEX ix_reports_received_at ON reports (received_at);
 
 CREATE INDEX ix_reports_host_id ON reports (host_id);
 
-CREATE TABLE alerts (
+CREATE TABLE baseline (
 	id SERIAL NOT NULL, 
 	host_id INTEGER NOT NULL, 
-	rule_id INTEGER, 
-	port INTEGER, 
-	title VARCHAR(200) NOT NULL, 
-	message TEXT NOT NULL, 
-	severity severity NOT NULL, 
-	status alert_status NOT NULL, 
-	confidence VARCHAR(10) DEFAULT 'media' NOT NULL, 
-	created_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, 
-	notified_at TIMESTAMP WITH TIME ZONE, 
-	updated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, 
+	port INTEGER NOT NULL, 
+	protocol VARCHAR(10) NOT NULL, 
+	exe_path TEXT NOT NULL, 
 	PRIMARY KEY (id), 
-	FOREIGN KEY(host_id) REFERENCES hosts (id) ON DELETE CASCADE, 
-	FOREIGN KEY(rule_id) REFERENCES rules (id) ON DELETE SET NULL
+	UNIQUE (host_id, port, protocol, exe_path), 
+	FOREIGN KEY(host_id) REFERENCES hosts (id) ON DELETE CASCADE
 );
 
-CREATE INDEX ix_alerts_status ON alerts (status);
-
-CREATE INDEX ix_alerts_host_id ON alerts (host_id);
+CREATE INDEX ix_baseline_host_id ON baseline (host_id);
 
 CREATE TABLE processes (
 	id SERIAL NOT NULL, 
@@ -115,9 +111,9 @@ CREATE TABLE processes (
 	FOREIGN KEY(report_id) REFERENCES reports (id) ON DELETE CASCADE
 );
 
-CREATE INDEX ix_processes_report_id ON processes (report_id);
-
 CREATE INDEX ix_processes_sha256 ON processes (sha256);
+
+CREATE INDEX ix_processes_report_id ON processes (report_id);
 
 CREATE TABLE ports (
 	id SERIAL NOT NULL, 
@@ -132,6 +128,34 @@ CREATE TABLE ports (
 	FOREIGN KEY(process_id) REFERENCES processes (id) ON DELETE SET NULL
 );
 
+CREATE INDEX ix_ports_port ON ports (port);
+
 CREATE INDEX ix_ports_report_id ON ports (report_id);
 
-CREATE INDEX ix_ports_port ON ports (port);
+CREATE TABLE alerts (
+	id SERIAL NOT NULL, 
+	host_id INTEGER NOT NULL, 
+	rule_id INTEGER, 
+	report_id INTEGER, 
+	process_id INTEGER, 
+	event_type event_type, 
+	fingerprint VARCHAR(64), 
+	port INTEGER, 
+	title VARCHAR(200) NOT NULL, 
+	message TEXT NOT NULL, 
+	severity severity NOT NULL, 
+	status alert_status NOT NULL, 
+	confidence VARCHAR(10) DEFAULT 'media' NOT NULL, 
+	created_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, 
+	notified_at TIMESTAMP WITH TIME ZONE, 
+	updated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, 
+	PRIMARY KEY (id), 
+	FOREIGN KEY(host_id) REFERENCES hosts (id) ON DELETE CASCADE, 
+	FOREIGN KEY(rule_id) REFERENCES rules (id) ON DELETE SET NULL, 
+	FOREIGN KEY(report_id) REFERENCES reports (id) ON DELETE SET NULL, 
+	FOREIGN KEY(process_id) REFERENCES processes (id) ON DELETE SET NULL
+);
+
+CREATE INDEX ix_alerts_status ON alerts (status);
+
+CREATE INDEX ix_alerts_host_id ON alerts (host_id);

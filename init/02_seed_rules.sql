@@ -1,4 +1,4 @@
--- Reglas de detección iniciales.
+-- Reglas de detección iniciales. Idempotente: si la regla ya existe, no la toca.
 INSERT INTO rules (code, title, description, severity, recommendation, enabled) VALUES
   ('SERVICIO_SIN_CIFRAR', 'Servicio sin cifrar expuesto', 'Telnet, FTP y otros protocolos sin cifrar escuchan en todas las interfaces, así que usuario, contraseña y datos viajan en texto plano.', 'alta', 'Desactiva el servicio o cámbialo por su versión cifrada (SSH en lugar de Telnet, SFTP en lugar de FTP).', TRUE),
   ('ACCESO_REMOTO_EXPUESTO', 'Acceso remoto expuesto', 'Escritorio remoto, SMB, VNC o SSH escuchan en todas las interfaces y reciben intentos de acceso constantes.', 'alta', 'Limita el acceso con firewall, VPN o una lista de IP permitidas.', TRUE),
